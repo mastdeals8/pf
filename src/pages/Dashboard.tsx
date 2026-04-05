@@ -65,7 +65,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     ] = await Promise.all([
       supabase.from('customers').select('id, name, phone, next_followup_date, city').eq('next_followup_date', today).eq('is_active', true),
       supabase.from('appointments').select('*').gte('start_time', today).lte('start_time', today + 'T23:59:59').order('start_time'),
-      supabase.from('dispatch_entries').select('id', { count: 'exact', head: true }).in('status', ['pending', 'dispatched', 'in_transit']),
+      supabase.from('courier_entries').select('id', { count: 'exact', head: true }).in('status', ['booked', 'in_transit']),
       supabase.from('invoices').select('id, total_amount, outstanding_amount, status, invoice_number, customer_name, invoice_date').gte('invoice_date', fromDate).lte('invoice_date', toDate).neq('status', 'cancelled'),
       supabase.from('invoices').select('id, invoice_number, customer_name, total_amount, status, invoice_date').order('created_at', { ascending: false }).limit(5),
       supabase.from('products').select('name, stock_quantity, low_stock_alert').eq('is_active', true),
@@ -129,7 +129,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       priority: 'medium' as const,
       label: `${pendingDispatches} pending dispatch${pendingDispatches > 1 ? 'es' : ''}`,
       detail: 'Orders awaiting shipment',
-      action: () => onNavigate('dispatch'),
+      action: () => onNavigate('courier'),
     }] : []),
     ...(pendingOrders > 0 ? [{
       type: 'dispatch' as const,
@@ -202,7 +202,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <p className="text-xs mt-1 text-neutral-400">Confirmed, needs dispatch</p>
           </button>
 
-          <button onClick={() => onNavigate('dispatch')} className="card text-left hover:shadow-md transition-all group">
+          <button onClick={() => onNavigate('courier')} className="card text-left hover:shadow-md transition-all group">
             <div className="flex items-start justify-between mb-3">
               <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Pending Dispatches</p>
               <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${pendingDispatches > 0 ? 'bg-warning-50' : 'bg-success-50'}`}>

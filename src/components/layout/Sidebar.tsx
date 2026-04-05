@@ -97,7 +97,7 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
               <NavItem id="challans" label="Delivery Challans" icon={Truck} />
               <NavItem id="invoices" label="Invoices" icon={Receipt} badge={unpaidInvoices} />
               <NavItem id="sales-returns" label="Returns" icon={RotateCcw} />
-              <NavItem id="courier" label="Courier Log" icon={PackageCheck} />
+              <NavItem id="courier" label="Shipments" icon={PackageCheck} />
             </div>
           </>
         )}

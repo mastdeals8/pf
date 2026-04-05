@@ -306,6 +306,7 @@ export interface CourierEntry {
   tracking_id?: string;
   weight_kg?: number;
   charges: number;
+  sales_order_id?: string;
   status: 'booked' | 'in_transit' | 'delivered' | 'returned';
   notes?: string;
   created_at: string;
@@ -579,7 +580,6 @@ export type ActivePage =
   | 'sales-orders'
   | 'invoices'
   | 'challans'
-  | 'dispatch'
   | 'sales-returns'
   | 'crm'
   | 'calendar'

@@ -28,6 +28,27 @@ export interface PageState {
   prefillDCForInvoice?: DCType;
 }
 
+const PAGE_TITLES: Partial<Record<ActivePage, string>> = {
+  dashboard: 'Dashboard',
+  crm: 'Clients',
+  calendar: 'Schedule',
+  'sales-orders': 'Sales Orders',
+  invoices: 'Invoices',
+  challans: 'Delivery Challans',
+  'sales-returns': 'Returns',
+  courier: 'Shipments',
+  inventory: 'Products',
+  'godown-stock': 'Godown Stock',
+  purchase: 'Purchases',
+  finance: 'Finance',
+  ledger: 'Ledger',
+  expenses: 'Expenses',
+  journal: 'Journal',
+  reports: 'Reports',
+  automation: 'Automation',
+  settings: 'Settings',
+};
+
 function AppShell() {
   const { user, loading, isAdmin, canAccessFinance, canAccessSales, canAccessInventory } = useAuth();
   const [activePage, setActivePage] = useState<ActivePage>('dashboard');
@@ -54,29 +75,23 @@ function AppShell() {
   const renderPage = () => {
     switch (activePage) {
       case 'dashboard': return <Dashboard onNavigate={navigate} />;
-
       case 'crm': return <CRM />;
       case 'calendar': return <CalendarPage />;
-
       case 'sales-orders': return canAccessSales ? <SalesOrders onNavigate={navigate} /> : <Dashboard onNavigate={navigate} />;
       case 'invoices': return canAccessSales ? <Invoices onNavigate={navigate} prefillFromDC={pageState.prefillDCForInvoice} /> : <Dashboard onNavigate={navigate} />;
       case 'challans': return canAccessSales ? <DeliveryChallan onNavigate={navigate} /> : <Dashboard onNavigate={navigate} />;
       case 'sales-returns': return canAccessSales ? <SalesReturns /> : <Dashboard onNavigate={navigate} />;
-
       case 'inventory': return canAccessInventory ? <Inventory /> : <Dashboard onNavigate={navigate} />;
       case 'godown-stock': return canAccessInventory ? <GodownStock /> : <Dashboard onNavigate={navigate} />;
       case 'purchase': return isAdmin ? <Purchase /> : <Dashboard onNavigate={navigate} />;
-
       case 'finance':
       case 'ledger': return canAccessFinance ? <Ledger /> : <Dashboard onNavigate={navigate} />;
       case 'expenses': return canAccessFinance ? <Expenses /> : <Dashboard onNavigate={navigate} />;
       case 'journal': return canAccessFinance ? <Journal /> : <Dashboard onNavigate={navigate} />;
-
       case 'courier': return <Courier />;
       case 'reports': return <Reports />;
       case 'automation': return isAdmin ? <Automation /> : <Dashboard onNavigate={navigate} />;
       case 'settings': return isAdmin ? <Settings /> : <Dashboard onNavigate={navigate} />;
-
       default: return <Dashboard onNavigate={navigate} />;
     }
   };
@@ -87,7 +102,10 @@ function AppShell() {
         <Sidebar activePage={activePage} onNavigate={navigate} />
       </div>
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="bg-white border-b border-neutral-100 px-4 py-2 flex items-center justify-end no-print">
+        <div className="bg-white border-b border-neutral-100 px-4 py-2 flex items-center justify-between no-print">
+          <p className="text-xs font-semibold text-neutral-400 tracking-wide">
+            {PAGE_TITLES[activePage] || ''}
+          </p>
           <DateRangeBar />
         </div>
         <main className="flex-1 flex flex-col overflow-hidden">
