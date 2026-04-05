@@ -88,7 +88,7 @@ function AppShell() {
       case 'ledger': return canAccessFinance ? <Ledger /> : <Dashboard onNavigate={navigate} />;
       case 'expenses': return canAccessFinance ? <Expenses /> : <Dashboard onNavigate={navigate} />;
       case 'journal': return canAccessFinance ? <Journal /> : <Dashboard onNavigate={navigate} />;
-      case 'courier': return <Courier />;
+      case 'courier': return <Courier prefillFromDC={pageState.prefillDCForShipment} />;
       case 'reports': return <Reports />;
       case 'automation': return isAdmin ? <Automation /> : <Dashboard onNavigate={navigate} />;
       case 'settings': return isAdmin ? <Settings /> : <Dashboard onNavigate={navigate} />;

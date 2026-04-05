@@ -103,20 +103,24 @@ export default function DeliveryChallan({ onNavigate }: DeliveryChallanProps) {
     setForm(f => ({ ...f, sales_order_id: soId }));
     if (!soId) return;
     setLoadingSO(true);
-    const so = salesOrders.find(s => s.id === soId);
-    if (so) {
-      const c = customers.find(c => c.id === so.customer_id);
+    // Fetch full SO row — includes customer_address, customer_city etc. saved at order time
+    const { data: fullSO } = await supabase
+      .from('sales_orders')
+      .select('*')
+      .eq('id', soId)
+      .maybeSingle();
+    if (fullSO) {
       setForm(f => ({
         ...f,
         sales_order_id: soId,
-        customer_id: so.customer_id || '',
-        customer_name: so.customer_name,
-        customer_phone: c?.phone || '',
-        customer_address: c?.address || '',
-        customer_address2: c?.address2 || '',
-        customer_city: c?.city || '',
-        customer_state: c?.state || '',
-        customer_pincode: c?.pincode || '',
+        customer_id: fullSO.customer_id || '',
+        customer_name: fullSO.customer_name || '',
+        customer_phone: fullSO.customer_phone || '',
+        customer_address: fullSO.customer_address || '',
+        customer_address2: fullSO.customer_address2 || '',
+        customer_city: fullSO.customer_city || '',
+        customer_state: fullSO.customer_state || '',
+        customer_pincode: fullSO.customer_pincode || '',
       }));
     }
     const { data: soItems } = await supabase

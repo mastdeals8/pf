@@ -606,12 +606,13 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
             <button onClick={editOrder ? handleEdit : handleSave} className="btn-primary">{editOrder ? 'Save Changes' : 'Create Order'}</button>
           </>
         }>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-3">
+          {/* Row 1: Customer + Name + Phone */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="label">Customer</label>
               <select value={form.customer_id} onChange={e => handleCustomerChange(e.target.value)} className="input">
-                <option value="">-- Select or type below --</option>
+                <option value="">-- Select --</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
@@ -620,7 +621,14 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
               <input value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} className="input" placeholder="Full name" />
             </div>
             <div>
-              <label className="label flex items-center gap-1.5"><Warehouse className="w-3.5 h-3.5 text-neutral-400" /> Dispatch Godown</label>
+              <label className="label">Phone</label>
+              <input value={form.customer_phone} onChange={e => setForm(f => ({ ...f, customer_phone: e.target.value }))} className="input" placeholder="+91 XXXXX XXXXX" />
+            </div>
+          </div>
+          {/* Row 2: Godown + SO Date + Delivery Date */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="label flex items-center gap-1"><Warehouse className="w-3 h-3 text-neutral-400" /> Dispatch Godown</label>
               <select
                 value={form.godown_id}
                 onChange={e => {
@@ -634,10 +642,6 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
               </select>
             </div>
             <div>
-              <label className="label">Phone</label>
-              <input value={form.customer_phone} onChange={e => setForm(f => ({ ...f, customer_phone: e.target.value }))} className="input" placeholder="+91 XXXXX XXXXX" />
-            </div>
-            <div>
               <label className="label">SO Date</label>
               <input type="date" value={form.so_date} onChange={e => setForm(f => ({ ...f, so_date: e.target.value }))} className="input" />
             </div>
@@ -645,25 +649,23 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
               <label className="label">Delivery Date</label>
               <input type="date" value={form.delivery_date} onChange={e => setForm(f => ({ ...f, delivery_date: e.target.value }))} className="input" />
             </div>
+          </div>
+          {/* Row 3: Address inline */}
+          <div className="grid grid-cols-4 gap-3">
             <div className="col-span-2">
-              <label className="label">Address Line 1</label>
-              <input value={form.customer_address} onChange={e => setForm(f => ({ ...f, customer_address: e.target.value }))} className="input" placeholder="Street / House No." />
-            </div>
-            <div className="col-span-2">
-              <label className="label">Address Line 2</label>
-              <input value={form.customer_address2} onChange={e => setForm(f => ({ ...f, customer_address2: e.target.value }))} className="input" placeholder="Area / Landmark" />
+              <label className="label">Address</label>
+              <input value={form.customer_address} onChange={e => setForm(f => ({ ...f, customer_address: e.target.value }))} className="input" placeholder="Street / House No., Area / Landmark" />
             </div>
             <div>
               <label className="label">City</label>
               <input value={form.customer_city} onChange={e => setForm(f => ({ ...f, customer_city: e.target.value }))} className="input" placeholder="City" />
             </div>
             <div>
-              <label className="label">State</label>
-              <input value={form.customer_state} onChange={e => setForm(f => ({ ...f, customer_state: e.target.value }))} className="input" placeholder="State" />
-            </div>
-            <div>
-              <label className="label">PIN Code</label>
-              <input value={form.customer_pincode} onChange={e => setForm(f => ({ ...f, customer_pincode: e.target.value }))} className="input" placeholder="PIN Code" />
+              <label className="label">State / PIN</label>
+              <div className="flex gap-1">
+                <input value={form.customer_state} onChange={e => setForm(f => ({ ...f, customer_state: e.target.value }))} className="input" placeholder="State" />
+                <input value={form.customer_pincode} onChange={e => setForm(f => ({ ...f, customer_pincode: e.target.value }))} className="input w-20" placeholder="PIN" />
+              </div>
             </div>
           </div>
 
