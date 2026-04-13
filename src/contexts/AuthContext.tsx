@@ -19,6 +19,7 @@ interface AuthContextType {
   isAccountant: boolean;
   isStaff: boolean;
   canAccessFinance: boolean;
+  canAccessExpenses: boolean;
   canAccessInventory: boolean;
   canAccessSales: boolean;
   loading: boolean;
@@ -101,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAccountant,
       isStaff,
       canAccessFinance: isAdmin || isAccountant,
+      canAccessExpenses: isAdmin || isAccountant || isStaff,
       canAccessInventory: isAdmin || isStaff || isAccountant,
       canAccessSales: isAdmin || isStaff || isAccountant,
       loading, signIn, signUp, signOut,

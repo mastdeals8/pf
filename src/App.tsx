@@ -50,7 +50,7 @@ const PAGE_TITLES: Partial<Record<ActivePage, string>> = {
 };
 
 function AppShell() {
-  const { user, loading, isAdmin, canAccessFinance, canAccessSales, canAccessInventory } = useAuth();
+  const { user, loading, isAdmin, canAccessFinance, canAccessSales, canAccessInventory, canAccessExpenses } = useAuth();
   const [activePage, setActivePage] = useState<ActivePage>('dashboard');
   const [pageState, setPageState] = useState<PageState>({});
 
@@ -86,7 +86,7 @@ function AppShell() {
       case 'purchase': return isAdmin ? <Purchase /> : <Dashboard onNavigate={navigate} />;
       case 'finance':
       case 'ledger': return canAccessFinance ? <Ledger /> : <Dashboard onNavigate={navigate} />;
-      case 'expenses': return canAccessFinance ? <Expenses /> : <Dashboard onNavigate={navigate} />;
+      case 'expenses': return canAccessExpenses ? <Expenses /> : <Dashboard onNavigate={navigate} />;
       case 'journal': return canAccessFinance ? <Journal /> : <Dashboard onNavigate={navigate} />;
       case 'courier': return <Courier prefillFromDC={pageState.prefillDCForShipment} />;
       case 'reports': return <Reports />;

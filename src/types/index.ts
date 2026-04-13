@@ -369,7 +369,11 @@ export interface Expense {
   payment_mode: string;
   reference_number?: string;
   notes?: string;
+  receipt_image_url?: string;
+  product_image_url?: string;
+  payment_screenshot_url?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface LedgerEntry {

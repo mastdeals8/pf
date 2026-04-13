@@ -15,7 +15,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
-  const { profile, isAdmin, canAccessFinance, canAccessSales, canAccessInventory, signOut } = useAuth();
+  const { profile, isAdmin, canAccessFinance, canAccessSales, canAccessInventory, canAccessExpenses, signOut } = useAuth();
   const [unpaidInvoices, setUnpaidInvoices] = useState(0);
 
   useEffect(() => {
@@ -113,13 +113,13 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
           </>
         )}
 
-        {canAccessFinance && (
+        {canAccessExpenses && (
           <>
             <SectionLabel label="Finance" />
             <div className="space-y-0.5">
-              <NavItem id="ledger" label="Ledger" icon={BookOpen} />
+              {canAccessFinance && <NavItem id="ledger" label="Ledger" icon={BookOpen} />}
               <NavItem id="expenses" label="Expenses" icon={CreditCard} />
-              <NavItem id="journal" label="Journal" icon={FileText} />
+              {canAccessFinance && <NavItem id="journal" label="Journal" icon={FileText} />}
             </div>
           </>
         )}
