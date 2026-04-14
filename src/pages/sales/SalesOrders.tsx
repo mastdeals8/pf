@@ -5,7 +5,6 @@ import { formatCurrency, formatDate, generateId, nextDocNumber, exportToCSV } fr
 import Modal from '../../components/ui/Modal';
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
-import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { useDateRange } from '../../contexts/DateRangeContext';
 import { getSmartRate } from '../../lib/rateCardService';
 import { fetchGodowns, getGodownStockForProduct } from '../../services/godownService';
@@ -50,6 +49,8 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
   const [deleteTarget, setDeleteTarget] = useState<SalesOrder | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [linkedInfo, setLinkedInfo] = useState<{invoices: number; challans: number} | null>(null);
   const [printOrder, setPrintOrder] = useState<SalesOrder | null>(null);
   const [printItems, setPrintItems] = useState<SalesOrderItem[]>([]);
   const [printCompany, setPrintCompany] = useState<Company | undefined>(undefined);
@@ -328,9 +329,47 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    await supabase.from('sales_orders').update({ status: 'cancelled' }).eq('id', deleteTarget.id);
-    setDeleteTarget(null);
-    loadData();
+    setDeleting(true);
+    try {
+      const soId = deleteTarget.id;
+
+      // 1. Delete invoice items + invoices linked to this SO
+      const { data: linkedInvs } = await supabase
+        .from('invoices').select('id').eq('sales_order_id', soId);
+      for (const inv of (linkedInvs || [])) {
+        await supabase.from('invoice_items').delete().eq('invoice_id', inv.id);
+        await supabase.from('invoices').delete().eq('id', inv.id);
+      }
+
+      // 2. Delete DC items + delivery challans linked to this SO
+      const { data: linkedDCs } = await supabase
+        .from('delivery_challans').select('id').eq('sales_order_id', soId);
+      for (const dc of (linkedDCs || [])) {
+        await supabase.from('delivery_challan_items').delete().eq('delivery_challan_id', dc.id);
+        await supabase.from('delivery_challans').delete().eq('id', dc.id);
+      }
+
+      // 3. Delete SO items + SO itself (FK now SET NULL on children)
+      await supabase.from('sales_order_items').delete().eq('sales_order_id', soId);
+      await supabase.from('sales_orders').delete().eq('id', soId);
+
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+      setLinkedInfo(null);
+      loadData();
+    }
+  };
+
+  // Check what's linked before showing confirm
+  const initiateDelete = async (o: SalesOrder) => {
+    const [invRes, dcRes] = await Promise.all([
+      supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('sales_order_id', o.id),
+      supabase.from('delivery_challans').select('id', { count: 'exact', head: true }).eq('sales_order_id', o.id),
+    ]);
+    setLinkedInfo({ invoices: invRes.count || 0, challans: dcRes.count || 0 });
+    setDeleteTarget(o);
+    setShowConfirm(true);
   };
 
   const handleExportCSV = () => {
@@ -595,7 +634,7 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
                         {o.status !== 'cancelled' && (
                           <button onClick={() => openEdit(o)} title="Edit" className="p-1.5 rounded-lg text-neutral-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
                         )}
-                        <button onClick={() => { setDeleteTarget(o); setShowConfirm(true); }} title="Cancel" className="p-1.5 rounded-lg text-neutral-400 hover:text-error-600 hover:bg-error-50 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => initiateDelete(o)} title="Delete" className="p-1.5 rounded-lg text-neutral-400 hover:text-error-600 hover:bg-error-50 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </td>
                   </tr>
@@ -959,15 +998,40 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
         )}
       </Modal>
 
-      <ConfirmDialog
-        isOpen={showConfirm}
-        onClose={() => { setShowConfirm(false); setDeleteTarget(null); }}
-        onConfirm={handleDelete}
-        title="Cancel Sales Order"
-        message={`Are you sure you want to cancel order ${deleteTarget?.so_number}? This action cannot be undone.`}
-        confirmLabel="Cancel Order"
-        isDanger
-      />
+      {showConfirm && deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !deleting && setShowConfirm(false)} />
+          <div className="relative bg-white rounded-2xl shadow-card-lg w-full max-w-sm p-5">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-error-50 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-error-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-900">Delete Sales Order</h3>
+                <p className="text-sm text-neutral-500 mt-1">
+                  Delete <span className="font-semibold text-neutral-800">{deleteTarget.so_number}</span>?
+                </p>
+                {linkedInfo && (linkedInfo.invoices > 0 || linkedInfo.challans > 0) && (
+                  <div className="mt-2 p-2.5 bg-warning-50 border border-warning-200 rounded-lg">
+                    <p className="text-xs font-semibold text-warning-700 mb-1">⚠️ This will also delete:</p>
+                    <ul className="text-xs text-warning-600 space-y-0.5">
+                      {linkedInfo.invoices > 0 && <li>• {linkedInfo.invoices} linked invoice{linkedInfo.invoices > 1 ? 's' : ''}</li>}
+                      {linkedInfo.challans > 0 && <li>• {linkedInfo.challans} delivery challan{linkedInfo.challans > 1 ? 's' : ''}</li>}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setShowConfirm(false); setDeleteTarget(null); setLinkedInfo(null); }} disabled={deleting} className="btn-secondary text-xs">Cancel</button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-error-600 hover:bg-error-700 disabled:opacity-60 transition-colors flex items-center gap-1.5">
+                {deleting ? <><div className="w-3 h-3 border-2 border-white/60 border-t-white rounded-full animate-spin" /> Deleting...</> : <><Trash2 className="w-3 h-3" /> Delete All</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full-screen print preview — same UX as Invoice */}
       {showPrint && printOrder && (

@@ -40,6 +40,11 @@ export default function UsersTab() {
   const [addSuccess, setAddSuccess] = useState('');
   const [resetEmail, setResetEmail] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
+  const [changePwdId, setChangePwdId] = useState<string | null>(null);
+  const [newPwd, setNewPwd] = useState('');
+  const [changingPwd, setChangingPwd] = useState(false);
+  const [pwdError, setPwdError] = useState('');
+  const [pwdDone, setPwdDone] = useState<string | null>(null);
 
   useEffect(() => { loadUsers(); }, []);
 
@@ -83,6 +88,33 @@ export default function UsersTab() {
     });
     setResetSent(true);
     setTimeout(() => { setResetEmail(null); setResetSent(false); }, 4000);
+  };
+
+  const changePassword = async (userId: string) => {
+    if (newPwd.length < 6) { setPwdError('Password must be at least 6 characters.'); return; }
+    setChangingPwd(true);
+    setPwdError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-set-password`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ userId, newPassword: newPwd }),
+        }
+      );
+      const result = await res.json();
+      if (!res.ok) { setPwdError(result.error || 'Failed to update password.'); return; }
+      setPwdDone(userId);
+      setChangePwdId(null);
+      setNewPwd('');
+      setTimeout(() => setPwdDone(p => p === userId ? null : p), 3000);
+    } catch { setPwdError('Network error. Try again.'); }
+    finally { setChangingPwd(false); }
   };
 
   if (loading) return <div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" /></div>;
@@ -188,8 +220,39 @@ export default function UsersTab() {
                   >
                     {resetEmail === u.email && resetSent ? <CheckCircle className="w-3 h-3 text-success-500" /> : <RefreshCw className="w-3 h-3" />}
                   </button>
+                  {/* Direct password change */}
+                  {pwdDone === u.id
+                    ? <CheckCircle className="w-4 h-4 text-success-500" />
+                    : <button onClick={() => { setChangePwdId(u.id); setNewPwd(''); setPwdError(''); }}
+                        title="Set new password"
+                        className="p-1.5 rounded-lg text-neutral-400 hover:text-warning-600 hover:bg-warning-50 transition-colors">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                      </button>
+                  }
                 </div>
               )}
+
+            {/* Inline password change form */}
+            {changePwdId === u.id && (
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="password"
+                  value={newPwd}
+                  onChange={e => { setNewPwd(e.target.value); setPwdError(''); }}
+                  placeholder="New password (min 6 chars)"
+                  className="input text-xs flex-1"
+                />
+                <button onClick={() => changePassword(u.id)} disabled={changingPwd}
+                  className="btn-primary text-xs py-1 px-2.5 shrink-0">
+                  {changingPwd ? '...' : 'Set'}
+                </button>
+                <button onClick={() => { setChangePwdId(null); setNewPwd(''); setPwdError(''); }}
+                  className="btn-secondary text-xs py-1 px-2 shrink-0">✕</button>
+              </div>
+            )}
+            {changePwdId === u.id && pwdError && (
+              <p className="text-xs text-error-600 mt-1">{pwdError}</p>
+            )}
             </div>
 
             {/* Role description shown when editing */}
