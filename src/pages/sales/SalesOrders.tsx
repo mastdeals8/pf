@@ -831,20 +831,7 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
           <div className="flex items-center gap-3">
             <button onClick={() => { setShowViewModal(false); setViewOrder(null); }} className="btn-secondary">Close</button>
             {viewOrder && (
-              <button onClick={() => {
-                setShowViewModal(false);
-                window.setTimeout(() => {
-                  const printContent = document.getElementById(`proforma-${viewOrder.id}`);
-                  if (printContent) {
-                    const w = window.open('', '_blank');
-                    if (w) {
-                      w.document.write(`<html><head><title>Proforma Invoice - ${viewOrder.so_number}</title><style>body{font-family:sans-serif;padding:20px;color:#333}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f5f5f5}h2{margin:0}.header{display:flex;justify-content:space-between;margin-bottom:20px}.label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.5px}.value{font-size:13px;font-weight:600}.badge{background:#e8f4fd;color:#1565c0;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}.total-section{margin-top:16px;text-align:right}.total{font-size:16px;font-weight:700}.footer{margin-top:24px;padding-top:12px;border-top:1px solid #eee;text-align:center;color:#666;font-size:11px}</style></head><body>${printContent.innerHTML}</body></html>`);
-                      w.document.close();
-                      w.print();
-                    }
-                  }
-                }, 100);
-              }} className="btn-primary flex items-center gap-1.5">
+              <button onClick={() => { setShowViewModal(false); openSOPrint(viewOrder); }} className="btn-primary flex items-center gap-1.5">
                 <Printer className="w-3.5 h-3.5" /> Print Proforma
               </button>
             )}

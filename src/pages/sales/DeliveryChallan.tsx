@@ -353,7 +353,9 @@ export default function DeliveryChallan({ onNavigate }: DeliveryChallanProps) {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    await supabase.from('delivery_challans').update({ status: 'cancelled' }).eq('id', deleteTarget.id);
+    // Delete items first, then the challan itself
+    await supabase.from('delivery_challan_items').delete().eq('delivery_challan_id', deleteTarget.id);
+    await supabase.from('delivery_challans').delete().eq('id', deleteTarget.id);
     setDeleteTarget(null);
     loadData();
   };

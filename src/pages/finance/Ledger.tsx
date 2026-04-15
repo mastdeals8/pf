@@ -354,8 +354,16 @@ export default function Ledger() {
     <p style="margin-top:32px;font-size:10px;color:#aaa;text-align:center">Generated on ${new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'long', year:'numeric' })}</p>
     </body></html>`;
 
-    const w = window.open('', '_blank');
-    if (w) { w.document.write(html); w.document.close(); w.print(); }
+    // Use hidden iframe to avoid blank popup (window.open blocked by browsers)
+    const existingFrame = document.getElementById('ledger-print-frame');
+    if (existingFrame) existingFrame.remove();
+    const iframe = document.createElement('iframe');
+    iframe.id = 'ledger-print-frame';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;border:none;';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (doc) { doc.open(); doc.write(html); doc.close(); }
+    setTimeout(() => { iframe.contentWindow?.print(); }, 300);
   };
 
   const filteredCustomers = customers.filter(c =>
