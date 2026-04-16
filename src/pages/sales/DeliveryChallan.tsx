@@ -76,7 +76,7 @@ export default function DeliveryChallan({ onNavigate }: DeliveryChallanProps) {
   const loadData = async () => {
     const [challansRes, productsRes, customersRes, soRes, godownsRes] = await Promise.all([
       supabase.from('delivery_challans').select('*').order('created_at', { ascending: false }),
-      supabase.from('products').select('id, name, unit, selling_price').eq('is_active', true),
+      supabase.from('products').select('id, name, unit, selling_price, company_id').eq('is_active', true),
       supabase.from('customers').select('id, name, phone, address, address2, city, state, pincode').eq('is_active', true).order('name'),
       supabase.from('sales_orders').select('id, so_number, customer_id, customer_name, status').in('status', ['confirmed', 'dispatched', 'delivered']).order('created_at', { ascending: false }),
       supabase.from('godowns').select('id, name').eq('is_active', true).order('name'),
@@ -197,6 +197,9 @@ export default function DeliveryChallan({ onNavigate }: DeliveryChallanProps) {
 
   const handleSave = async () => {
     const challanNumber = await nextDocNumber('DC', supabase);
+    const firstProdId = items.find(i => i.product_id)?.product_id;
+    const firstProd = firstProdId ? products.find(p => p.id === firstProdId) : null;
+    const dcCompanyId = (firstProd as unknown as { company_id?: string })?.company_id || null;
     const { data: challan } = await supabase.from('delivery_challans').insert({
       challan_number: challanNumber,
       sales_order_id: form.sales_order_id || null,
@@ -213,6 +216,7 @@ export default function DeliveryChallan({ onNavigate }: DeliveryChallanProps) {
       courier_company: form.courier_company,
       tracking_number: form.tracking_number,
       status: 'dispatched', notes: form.notes,
+      company_id: dcCompanyId,
     }).select().single();
 
     if (challan) {

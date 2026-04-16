@@ -197,6 +197,9 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
 
   const handleSave = async () => {
     const soNumber = await nextDocNumber('SO', supabase);
+    const firstProdId = items.find(i => i.product_id)?.product_id;
+    const firstProd = firstProdId ? products.find(p => p.id === firstProdId) : null;
+    const soCompanyId = (firstProd as unknown as { company_id?: string })?.company_id || null;
     const { data: so } = await supabase.from('sales_orders').insert({
       so_number: soNumber,
       customer_id: form.customer_id || null,
@@ -217,6 +220,7 @@ export default function SalesOrders({ onNavigate }: SalesOrdersProps) {
       total_amount: total,
       notes: form.notes,
       godown_id: form.godown_id || null,
+      company_id: soCompanyId,
     }).select().single();
 
     if (so) {

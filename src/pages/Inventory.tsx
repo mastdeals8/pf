@@ -91,6 +91,7 @@ export default function Inventory() {
     const stocks: Record<string, string> = {};
     (godowns).forEach(g => { stocks[g.id] = '0'; });
     setOpeningStocks(stocks);
+    const defaultCompany = companies.find(c => c.sort_order === 2) || companies[0];
     setForm({
       name: '', category: 'Astro Products', unit: 'pcs',
       purchase_price: '', selling_price: '', low_stock_alert: '5',
@@ -98,6 +99,7 @@ export default function Inventory() {
       direction: '', is_gemstone: false, weight_grams: '',
       total_weight: '', weight_unit: 'grams',
       low_stock_enabled: true,
+      company_id: defaultCompany?.id || '',
     });
     setShowModal(true);
   };
@@ -124,6 +126,7 @@ export default function Inventory() {
       total_weight: p.total_weight ? String(p.total_weight) : '',
       weight_unit: (p.weight_unit as 'grams' | 'carats') || 'grams',
       low_stock_enabled: p.low_stock_alert > 0,
+      company_id: (p as unknown as { company_id?: string }).company_id || '',
     });
     setShowModal(true);
   };
