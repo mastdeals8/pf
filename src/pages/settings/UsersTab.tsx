@@ -95,25 +95,39 @@ export default function UsersTab() {
     setChangingPwd(true);
     setPwdError('');
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-set-password`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({ userId, newPassword: newPwd }),
+      const isSelf = userId === myProfile?.id;
+      if (isSelf) {
+        const { error } = await supabase.auth.updateUser({ password: newPwd });
+        if (error) { setPwdError(error.message || 'Failed to update password.'); return; }
+      } else {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) { setPwdError('Not authenticated. Please reload.'); return; }
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-set-password`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ userId, newPassword: newPwd }),
+          }
+        );
+        if (!res.ok) {
+          let errMsg = 'Failed to update password.';
+          try { const j = await res.json(); errMsg = j.error || errMsg; } catch { /* ignore */ }
+          setPwdError(errMsg);
+          return;
         }
-      );
-      const result = await res.json();
-      if (!res.ok) { setPwdError(result.error || 'Failed to update password.'); return; }
+      }
       setPwdDone(userId);
       setChangePwdId(null);
       setNewPwd('');
       setTimeout(() => setPwdDone(p => p === userId ? null : p), 3000);
-    } catch { setPwdError('Network error. Try again.'); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unexpected error. Try again.';
+      setPwdError(msg);
+    }
     finally { setChangingPwd(false); }
   };
 
@@ -234,24 +248,28 @@ export default function UsersTab() {
 
             {/* Inline password change form */}
             {changePwdId === u.id && (
-              <div className="mt-2 flex items-center gap-2">
-                <input
-                  type="password"
-                  value={newPwd}
-                  onChange={e => { setNewPwd(e.target.value); setPwdError(''); }}
-                  placeholder="New password (min 6 chars)"
-                  className="input text-xs flex-1"
-                />
-                <button onClick={() => changePassword(u.id)} disabled={changingPwd}
-                  className="btn-primary text-xs py-1 px-2.5 shrink-0">
-                  {changingPwd ? '...' : 'Set'}
-                </button>
-                <button onClick={() => { setChangePwdId(null); setNewPwd(''); setPwdError(''); }}
-                  className="btn-secondary text-xs py-1 px-2 shrink-0">✕</button>
+              <div className="mt-3 border-t border-neutral-100 pt-3">
+                <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wide mb-2">
+                  {u.id === myProfile?.id ? 'Change Your Password' : `Set Password for ${u.display_name}`}
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    value={newPwd}
+                    onChange={e => { setNewPwd(e.target.value); setPwdError(''); }}
+                    placeholder="New password (min 6 chars)"
+                    className="input text-xs flex-1"
+                    autoFocus
+                  />
+                  <button onClick={() => changePassword(u.id)} disabled={changingPwd}
+                    className="btn-primary text-xs py-1.5 px-3 shrink-0">
+                    {changingPwd ? 'Saving...' : 'Set Password'}
+                  </button>
+                  <button onClick={() => { setChangePwdId(null); setNewPwd(''); setPwdError(''); }}
+                    className="btn-secondary text-xs py-1.5 px-2 shrink-0">Cancel</button>
+                </div>
+                {pwdError && <p className="text-xs text-error-600 mt-1.5 font-medium">{pwdError}</p>}
               </div>
-            )}
-            {changePwdId === u.id && pwdError && (
-              <p className="text-xs text-error-600 mt-1">{pwdError}</p>
             )}
             </div>
 
