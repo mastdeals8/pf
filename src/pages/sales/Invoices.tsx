@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Search, CreditCard, FileText, Download, Printer, Pencil, Trash2, Eye, Warehouse, CheckCircle, XCircle, X } from 'lucide-react';
+import { Plus, Search, CreditCard, FileText, Download, Printer, Pencil, Eye, CheckCircle, XCircle, X, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency, formatDate, formatDateInput, generateId, nextDocNumber, exportToCSV } from '../../lib/utils';
 import Modal from '../../components/ui/Modal';
@@ -42,6 +42,9 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
   const [cancelTarget, setCancelTarget] = useState<Invoice | null>(null);
+  const [cancellingInvoiceId, setCancellingInvoiceId] = useState<string | null>(null);
+  const [invDropdownOpen, setInvDropdownOpen] = useState<string | null>(null);
+  const invDropdownRef = useRef<HTMLDivElement>(null);
   const [viewRelated, setViewRelated] = useState<{dispatches: {dispatch_number: string; status: string}[]; payments: {amount: number; payment_date: string; payment_mode: string}[]}>({ dispatches: [], payments: [] });
   const [showSOSelectModal, setShowSOSelectModal] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -90,6 +93,16 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
   const [payForm, setPayForm] = useState({ amount: '', payment_mode: 'Cash', reference_number: '', payment_date: new Date().toISOString().split('T')[0] });
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (invDropdownRef.current && !invDropdownRef.current.contains(e.target as Node)) {
+        setInvDropdownOpen(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   useEffect(() => {
     if (!prefillFromDC) return;
@@ -838,7 +851,9 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
     const matchSearch = i.customer_name.toLowerCase().includes(search.toLowerCase()) || i.invoice_number.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'All'
       ? i.status !== 'cancelled'
-      : i.status === statusFilter.toLowerCase();
+      : statusFilter === 'Pending'
+        ? ['sent', 'draft', 'overdue'].includes(i.status)
+        : i.status === statusFilter.toLowerCase();
     const matchDate = i.invoice_date >= dateRange.from && i.invoice_date <= dateRange.to;
     const matchCustomer = !filterCustomer || i.customer_name === filterCustomer;
     const matchFrom = !filterFrom || i.invoice_date >= filterFrom;
@@ -852,7 +867,7 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
   const totalOutstanding = invoices.filter(i => i.status !== 'cancelled').reduce((s, i) => s + (i.outstanding_amount || 0), 0);
   const paidThisMonth = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total_amount, 0);
 
-  const STATUSES = ['All', 'Draft', 'Sent', 'Partial', 'Paid', 'Overdue', 'Cancelled'];
+  const STATUSES = ['All', 'Pending', 'Partial', 'Paid'];
 
   const filteredSOs = availableSOs.filter(so =>
     so.customer_name.toLowerCase().includes(soSearch.toLowerCase()) ||
@@ -990,37 +1005,53 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
                     </td>
                     <td className="table-cell"><StatusBadge status={inv.status} /></td>
                     <td className="table-cell text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {!isPaid && inv.status !== 'cancelled' ? (
+                      <div className="flex items-center justify-end gap-1" ref={invDropdownRef}>
+                        {!isPaid && inv.status !== 'cancelled' && (
                           <button onClick={() => openPayment(inv)} title="Record Payment"
                             className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors text-[10px] font-medium">
                             <CreditCard className="w-3 h-3" /> Pay
                           </button>
-                        ) : inv.status === 'paid' ? (
-                          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-success-50 text-success-600 text-[10px] font-medium cursor-default">
-                            <CheckCircle className="w-3 h-3" /> Paid
-                          </span>
-                        ) : null}
+                        )}
                         <button onClick={() => openView(inv)} title="View"
-                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 transition-colors">
-                          <Eye className="w-3.5 h-3.5" />
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 transition-colors text-[10px] font-medium">
+                          <Eye className="w-3 h-3" /> View
                         </button>
-                        <button onClick={() => openPrint(inv)} title="Print / PDF"
-                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 transition-colors">
-                          <Printer className="w-3.5 h-3.5" />
-                        </button>
-                        {inv.status !== 'paid' && inv.status !== 'cancelled' && (
-                          <button onClick={() => openEdit(inv)} title="Edit"
-                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 transition-colors">
-                            <Pencil className="w-3.5 h-3.5" />
+                        <div className="relative">
+                          <button
+                            onClick={() => setInvDropdownOpen(invDropdownOpen === inv.id ? null : inv.id)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 transition-colors"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                        {inv.status !== 'paid' && inv.status !== 'cancelled' && (
-                          <button onClick={() => setCancelTarget(inv)} title="Cancel Invoice"
-                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-error-50 text-neutral-400 hover:text-error-600 transition-colors">
-                            <XCircle className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                          {invDropdownOpen === inv.id && (
+                            <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-neutral-200 rounded-lg shadow-lg z-10 overflow-hidden">
+                              <button
+                                onClick={() => { setInvDropdownOpen(null); openPrint(inv); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-neutral-700 hover:bg-neutral-50 transition-colors"
+                              >
+                                <Printer className="w-3.5 h-3.5" /> Print / PDF
+                              </button>
+                              {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+                                <button
+                                  onClick={() => { setInvDropdownOpen(null); openEdit(inv); }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-neutral-700 hover:bg-neutral-50 transition-colors"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" /> Edit
+                                </button>
+                              )}
+                              {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+                                <button
+                                  onClick={() => { setInvDropdownOpen(null); setCancelTarget(inv); }}
+                                  disabled={cancellingInvoiceId === inv.id}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-error-600 hover:bg-error-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  {cancellingInvoiceId === inv.id ? 'Cancelling...' : 'Cancel'}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -1612,16 +1643,28 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
 
       <ConfirmDialog
         isOpen={!!cancelTarget}
-        onClose={() => setCancelTarget(null)}
+        onClose={() => { if (!cancellingInvoiceId) setCancelTarget(null); }}
         onConfirm={async () => {
           if (!cancelTarget) return;
+          setCancellingInvoiceId(cancelTarget.id);
+          const outstanding = cancelTarget.outstanding_amount || 0;
           await supabase.from('invoices').update({ status: 'cancelled', outstanding_amount: 0 }).eq('id', cancelTarget.id);
+          if (cancelTarget.customer_id && outstanding > 0) {
+            const { data: cust } = await supabase.from('customers').select('balance, total_revenue').eq('id', cancelTarget.customer_id).maybeSingle();
+            if (cust) {
+              await supabase.from('customers').update({
+                balance: Math.max(0, (cust.balance || 0) - outstanding),
+                total_revenue: Math.max(0, (cust.total_revenue || 0) - cancelTarget.total_amount),
+              }).eq('id', cancelTarget.customer_id);
+            }
+          }
+          setCancellingInvoiceId(null);
           setCancelTarget(null);
           loadData();
         }}
         title="Cancel Invoice"
         message={cancelTarget ? `Cancel invoice ${cancelTarget.invoice_number} for ${cancelTarget.customer_name}? This cannot be undone.` : ''}
-        confirmLabel="Yes, Cancel"
+        confirmLabel={cancellingInvoiceId ? 'Cancelling...' : 'Yes, Cancel'}
         isDanger
       />
 

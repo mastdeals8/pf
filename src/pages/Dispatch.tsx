@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Truck, Plus, CreditCard as Edit2, Search, CheckCircle, Clock, ArrowRight, Hash, Warehouse, AlertCircle, Lock, Download, X, XCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Truck, Plus, CreditCard as Edit2, Search, CheckCircle, Clock, ArrowRight, Hash, Warehouse, AlertCircle, Lock, Download, X, XCircle, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDate, exportToCSV, nextDocNumber } from '../lib/utils';
 import { fetchGodowns } from '../services/godownService';
@@ -74,8 +74,21 @@ export default function Dispatch({ prefillFromDC, onNavigate: _onNavigate }: Dis
   const [cancelTarget, setCancelTarget] = useState<DispatchEntry | null>(null);
   const [soMap, setSoMap] = useState<Record<string, string>>({});
   const [invMap, setInvMap] = useState<Record<string, string>>({});
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { loadDispatches(); loadOptions(); loadGodownsList(); }, []);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   useEffect(() => {
     if (prefillFromDC) {
@@ -118,17 +131,20 @@ export default function Dispatch({ prefillFromDC, onNavigate: _onNavigate }: Dis
   };
 
   const loadOptions = async () => {
-    const [soRes, invRes] = await Promise.all([
+    const [soRes, invDropdownRes, invAllRes] = await Promise.all([
       supabase.from('sales_orders').select('id, so_number, customer_name').in('status', ['confirmed', 'dispatched']).order('created_at', { ascending: false }).limit(50),
       supabase.from('invoices').select('id, invoice_number, customer_name').not('status', 'in', '(cancelled,paid)').order('created_at', { ascending: false }).limit(50),
+      supabase.from('invoices').select('id, invoice_number, status').order('created_at', { ascending: false }).limit(200),
     ]);
     setSoOptions(soRes.data || []);
-    setInvOptions(invRes.data || []);
+    setInvOptions(invDropdownRes.data || []);
     const sm: Record<string, string> = {};
     (soRes.data || []).forEach((s: { id: string; so_number: string }) => { sm[s.id] = s.so_number; });
     setSoMap(sm);
     const im: Record<string, string> = {};
-    (invRes.data || []).forEach((i: { id: string; invoice_number: string }) => { im[i.id] = i.invoice_number; });
+    (invAllRes.data || []).forEach((i: { id: string; invoice_number: string; status: string }) => {
+      if (i.status !== 'cancelled') im[i.id] = i.invoice_number;
+    });
     setInvMap(im);
   };
 
@@ -212,7 +228,9 @@ export default function Dispatch({ prefillFromDC, onNavigate: _onNavigate }: Dis
   };
 
   const cancelDispatch = async (d: DispatchEntry) => {
+    setCancellingId(d.id);
     await supabase.from('dispatch_entries').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', d.id);
+    setCancellingId(null);
     setCancelTarget(null);
     await loadDispatches();
   };
@@ -428,30 +446,58 @@ export default function Dispatch({ prefillFromDC, onNavigate: _onNavigate }: Dis
                                 SO: {soMap[d.sales_order_id] || 'Sales Order'}
                               </span>
                             )}
-                            {d.invoice_id && (
-                              <span className="text-[10px] font-medium bg-green-50 text-green-700 px-1.5 py-0.5 rounded w-fit">
-                                INV: {invMap[d.invoice_id] || 'Invoice'}
-                              </span>
-                            )}
+                            {d.invoice_id && (() => {
+                              const invNum = invMap[d.invoice_id];
+                              if (!invNum) {
+                                return (
+                                  <span className="text-[10px] font-medium bg-error-50 text-error-600 px-1.5 py-0.5 rounded w-fit">
+                                    Cancelled
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="text-[10px] font-medium bg-green-50 text-green-700 px-1.5 py-0.5 rounded w-fit">
+                                  INV: {invNum}
+                                </span>
+                              );
+                            })()}
                             {!d.sales_order_id && !d.invoice_id && <span className="text-neutral-300 text-xs">—</span>}
                           </div>
                         </td>
                         <td className="table-cell">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1" ref={dropdownRef}>
                             {isLocked ? (
                               <span className="flex items-center gap-1 text-[10px] text-neutral-400 px-1.5 py-1">
                                 <Lock className="w-3 h-3" />
                                 {isDelivered ? 'Delivered' : 'Cancelled'}
                               </span>
                             ) : (
-                              <>
-                                <button onClick={() => openEdit(d)} title="Edit dispatch" className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-primary-600 transition-colors">
-                                  <Edit2 className="w-3 h-3" />
+                              <div className="relative">
+                                <button
+                                  onClick={() => setOpenDropdown(openDropdown === d.id ? null : d.id)}
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-neutral-100 hover:bg-neutral-200 text-neutral-600 transition-colors"
+                                >
+                                  Actions <ChevronDown className="w-3 h-3" />
                                 </button>
-                                <button onClick={() => setCancelTarget(d)} title="Cancel dispatch" className="p-1.5 rounded hover:bg-error-50 text-neutral-400 hover:text-error-600 transition-colors">
-                                  <XCircle className="w-3 h-3" />
-                                </button>
-                              </>
+                                {openDropdown === d.id && (
+                                  <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-neutral-200 rounded-lg shadow-lg z-10 overflow-hidden">
+                                    <button
+                                      onClick={() => { setOpenDropdown(null); openEdit(d); }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-neutral-700 hover:bg-neutral-50 transition-colors"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" /> Edit
+                                    </button>
+                                    <button
+                                      onClick={() => { setOpenDropdown(null); setCancelTarget(d); }}
+                                      disabled={cancellingId === d.id}
+                                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-error-600 hover:bg-error-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      <XCircle className="w-3.5 h-3.5" />
+                                      {cancellingId === d.id ? 'Cancelling...' : 'Cancel'}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         </td>
