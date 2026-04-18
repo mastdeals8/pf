@@ -145,7 +145,7 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
                 <NavItem id="invoices" label="Invoices" icon={Receipt} badge={unpaidInvoices} />
                 <NavItem id="sales-returns" label="Returns" icon={RotateCcw} />
                 <NavItem id="courier" label="Shipments" icon={PackageCheck} />
-                {isAdmin && <NavItem id="drop-shipments" label="Drop Shipments" icon={Truck} />}
+                {/* Deprecated - replaced by B2B Sales Order flow */}
               </div>
             </>
           )}

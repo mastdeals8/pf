@@ -1,3 +1,4 @@
+// Deprecated - replaced by B2B Sales Order flow
 import { useState, useEffect } from 'react';
 import { Plus, Search, ChevronDown, ChevronRight, X, Download, Truck, Building2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';

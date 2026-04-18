@@ -23,7 +23,8 @@ import Courier from './pages/Courier';
 import Reports from './pages/Reports';
 import Automation from './pages/Automation';
 import Settings from './pages/Settings';
-import DropShipments from './pages/sales/DropShipments';
+// Deprecated - replaced by B2B Sales Order flow
+// import DropShipments from './pages/sales/DropShipments';
 import type { ActivePage, DeliveryChallan as DCType } from './types';
 
 export interface PageState {
@@ -32,7 +33,6 @@ export interface PageState {
 }
 
 const PAGE_TITLES: Partial<Record<ActivePage, string>> = {
-  'drop-shipments': 'B2B Drop Shipments',
   dashboard: 'Dashboard',
   crm: 'Clients',
   calendar: 'Schedule',
@@ -98,7 +98,8 @@ function AppShell() {
       case 'reports': return <Reports />;
       case 'automation': return isAdmin ? <Automation /> : <Dashboard onNavigate={navigate} />;
       case 'settings': return isAdmin ? <Settings /> : <Dashboard onNavigate={navigate} />;
-      case 'drop-shipments': return isAdmin ? <DropShipments /> : <Dashboard onNavigate={navigate} />;
+      // Deprecated - replaced by B2B Sales Order flow
+      case 'drop-shipments': return <Dashboard onNavigate={navigate} />;
       default: return <Dashboard onNavigate={navigate} />;
     }
   };
