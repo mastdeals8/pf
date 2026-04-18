@@ -67,6 +67,8 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
   const [selectedSO, setSelectedSO] = useState<SalesOrder | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const [printCompany, setPrintCompany] = useState<Company | undefined>(undefined);
+  const [printMode, setPrintMode] = useState<'normal' | 'b2b'>('normal');
+  const [shipToCustomer, setShipToCustomer] = useState<Customer | undefined>(undefined);
 
   const [form, setForm] = useState({
     customer_id: '', customer_name: '', customer_phone: '',
@@ -550,10 +552,12 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
     }
   };
 
-  const openPrint = async (inv: Invoice) => {
+  const openPrint = async (inv: Invoice, mode: 'normal' | 'b2b' = 'normal') => {
     const { data: itemsData } = await supabase.from('invoice_items').select('*').eq('invoice_id', inv.id);
     setSelectedInvoice({ ...inv, items: itemsData || [] });
-    // Load the company profile for this invoice
+    setPrintMode(mode);
+    setShipToCustomer(undefined);
+
     const invWithCompany = inv as Invoice & { company_id?: string };
     if (invWithCompany.company_id) {
       const co = await getCompanyById(invWithCompany.company_id);
@@ -561,6 +565,23 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
     } else {
       setPrintCompany(undefined);
     }
+
+    if (mode === 'b2b' && inv.sales_order_id) {
+      const { data: so } = await supabase
+        .from('sales_orders')
+        .select('ship_to_customer_id')
+        .eq('id', inv.sales_order_id)
+        .maybeSingle();
+      if (so?.ship_to_customer_id) {
+        const { data: shipCust } = await supabase
+          .from('customers')
+          .select('id, name, phone, address, address2, city, state, pincode')
+          .eq('id', so.ship_to_customer_id)
+          .maybeSingle();
+        setShipToCustomer(shipCust || undefined);
+      }
+    }
+
     setShowPrint(true);
   };
 
@@ -846,13 +867,21 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
                             <ChevronDown className="w-3.5 h-3.5" />
                           </button>
                           {invDropdownOpen === inv.id && (
-                            <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-neutral-200 rounded-lg shadow-lg z-10 overflow-hidden">
+                            <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-neutral-200 rounded-lg shadow-lg z-10 overflow-hidden">
                               <button
-                                onClick={() => { setInvDropdownOpen(null); openPrint(inv); }}
+                                onClick={() => { setInvDropdownOpen(null); openPrint(inv, 'normal'); }}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-neutral-700 hover:bg-neutral-50 transition-colors"
                               >
-                                <Printer className="w-3.5 h-3.5" /> Print / PDF
+                                <Printer className="w-3.5 h-3.5" /> Print Invoice
                               </button>
+                              {inv.sales_order_id && (
+                                <button
+                                  onClick={() => { setInvDropdownOpen(null); openPrint(inv, 'b2b'); }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-700 hover:bg-blue-50 transition-colors"
+                                >
+                                  <Printer className="w-3.5 h-3.5" /> Print B2B Invoice
+                                </button>
+                              )}
                               {inv.status !== 'paid' && inv.status !== 'cancelled' && (
                                 <button
                                   onClick={() => { setInvDropdownOpen(null); openEdit(inv); }}
@@ -937,7 +966,7 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
       <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Invoice Details" size="2xl"
         footer={
           <div className="flex gap-2">
-            <button onClick={() => { setShowViewModal(false); if (selectedInvoice) openPrint(selectedInvoice); }} className="btn-secondary">Print</button>
+            <button onClick={() => { setShowViewModal(false); if (selectedInvoice) openPrint(selectedInvoice, 'normal'); }} className="btn-secondary">Print</button>
             <button onClick={() => setShowViewModal(false)} className="btn-primary">Close</button>
           </div>
         }>
@@ -1346,14 +1375,26 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
       {showPrint && selectedInvoice && (
         <div className="fixed inset-0 z-50 bg-neutral-100 overflow-auto">
           <div className="no-print flex items-center justify-between bg-white border-b border-neutral-200 px-6 py-3">
-            <p className="text-sm font-semibold text-neutral-800">Invoice Preview - {selectedInvoice.invoice_number}</p>
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-semibold text-neutral-800">
+                {printMode === 'b2b' ? 'B2B Invoice Preview' : 'Invoice Preview'} — {selectedInvoice.invoice_number}
+              </p>
+              {printMode === 'b2b' && (
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full uppercase tracking-wider">B2B</span>
+              )}
+            </div>
             <div className="flex gap-2">
               <button onClick={handlePrint} className="btn-primary">Print / Save PDF</button>
               <button onClick={() => setShowPrint(false)} className="btn-secondary">Close</button>
             </div>
           </div>
           <div ref={printRef} className="py-6 print-content">
-            <InvoicePrint invoice={selectedInvoice} companyOverride={printCompany} />
+            <InvoicePrint
+              invoice={selectedInvoice}
+              companyOverride={printCompany}
+              printMode={printMode}
+              shipToCustomer={shipToCustomer}
+            />
           </div>
         </div>
       )}

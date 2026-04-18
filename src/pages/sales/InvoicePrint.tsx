@@ -1,6 +1,6 @@
 import { formatCurrency, formatDate, numberToWords } from '../../lib/utils';
 import { useCompanySettings } from '../../lib/useCompanySettings';
-import type { Invoice } from '../../types';
+import type { Invoice, Customer } from '../../types';
 import type { Company } from '../../lib/companiesService';
 
 function joinAddress(parts: (string | undefined | null)[]) {
@@ -9,13 +9,15 @@ function joinAddress(parts: (string | undefined | null)[]) {
 
 interface InvoicePrintProps {
   invoice: Invoice;
-  companyOverride?: Company; // if provided, use instead of default company_settings
+  companyOverride?: Company;
+  printMode?: 'normal' | 'b2b';
+  shipToCustomer?: Customer;
 }
 
-export default function InvoicePrint({ invoice, companyOverride }: InvoicePrintProps) {
+export default function InvoicePrint({ invoice, companyOverride, printMode = 'normal', shipToCustomer }: InvoicePrintProps) {
   const { company: defaultCompany } = useCompanySettings();
+  const isB2B = printMode === 'b2b';
 
-  // Use company override if available, fall back to default
   const co = companyOverride ? {
     name: companyOverride.name,
     tagline: companyOverride.tagline || '',
@@ -42,28 +44,38 @@ export default function InvoicePrint({ invoice, companyOverride }: InvoicePrintP
     invoice.customer_address, invoice.customer_address2,
     invoice.customer_city, invoice.customer_state, invoice.customer_pincode,
   ]);
+  const shipToAddress = shipToCustomer
+    ? joinAddress([shipToCustomer.address, (shipToCustomer as Customer & { address2?: string }).address2, shipToCustomer.city, shipToCustomer.state, shipToCustomer.pincode])
+    : '';
+
+  // In B2B mode: seller = invoice customer (Bill To), buyer = ship_to_customer (Ship To)
+  const sellerName = isB2B ? invoice.customer_name : co.name;
+  const sellerAddress = isB2B ? customerAddress : companyAddress;
+  const sellerPhone = isB2B ? invoice.customer_phone : co.phone;
 
   return (
     <div id="invoice-print" className="bg-white p-8 max-w-[800px] mx-auto text-neutral-900 font-sans">
       <div className="border-b-2 border-primary-600 pb-5 mb-5">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
-            {co.logo_url && (
+            {!isB2B && co.logo_url && (
               <img src={co.logo_url} alt={co.name} className="h-14 w-auto object-contain" />
             )}
             <div>
-              <h1 className="text-2xl font-bold text-primary-700 tracking-wide">{co.name.toUpperCase()}</h1>
-              <p className="text-sm text-neutral-600 mt-0.5 font-medium">{co.tagline}</p>
-              {companyAddress && <p className="text-xs text-neutral-500 mt-1">{companyAddress}</p>}
+              <h1 className="text-2xl font-bold text-primary-700 tracking-wide">{sellerName.toUpperCase()}</h1>
+              {!isB2B && co.tagline && <p className="text-sm text-neutral-600 mt-0.5 font-medium">{co.tagline}</p>}
+              {sellerAddress && <p className="text-xs text-neutral-500 mt-1">{sellerAddress}</p>}
               <div className="flex flex-wrap gap-3 mt-1">
-                {co.phone && <p className="text-xs text-neutral-500">{co.phone}</p>}
-                {co.email && <p className="text-xs text-neutral-500">{co.email}</p>}
-                {co.gstin && <p className="text-xs text-neutral-500">GSTIN: {co.gstin}</p>}
+                {sellerPhone && <p className="text-xs text-neutral-500">{sellerPhone}</p>}
+                {!isB2B && co.email && <p className="text-xs text-neutral-500">{co.email}</p>}
+                {!isB2B && co.gstin && <p className="text-xs text-neutral-500">GSTIN: {co.gstin}</p>}
               </div>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-bold text-neutral-700 uppercase tracking-widest">INVOICE</p>
+            <p className="text-2xl font-bold text-neutral-700 uppercase tracking-widest">
+              {isB2B ? 'B2B INVOICE' : 'INVOICE'}
+            </p>
             <p className="text-sm font-semibold text-primary-600 mt-1">#{invoice.invoice_number}</p>
             <p className="text-xs text-neutral-500 mt-0.5">Date: {formatDate(invoice.invoice_date)}</p>
             {invoice.due_date && <p className="text-xs text-neutral-500">Due: {formatDate(invoice.due_date)}</p>}
@@ -71,25 +83,53 @@ export default function InvoicePrint({ invoice, companyOverride }: InvoicePrintP
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6 mb-6">
+      <div className={`grid gap-6 mb-6 ${isB2B && shipToCustomer ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <div>
-          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">Bill From</p>
+          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">
+            {isB2B ? 'Seller (Bill To)' : 'Bill From'}
+          </p>
           <div className="bg-neutral-50 rounded-lg p-3">
-            <p className="font-semibold text-neutral-900">{co.name}</p>
-            {co.tagline && <p className="text-xs text-neutral-600 mt-1">{co.tagline}</p>}
-            {companyAddress && <p className="text-xs text-neutral-500 mt-0.5">{companyAddress}</p>}
-            {co.phone && <p className="text-xs text-neutral-500">{co.phone}</p>}
-            {co.email && <p className="text-xs text-neutral-500">{co.email}</p>}
+            <p className="font-semibold text-neutral-900">{sellerName}</p>
+            {!isB2B && co.tagline && <p className="text-xs text-neutral-600 mt-1">{co.tagline}</p>}
+            {sellerAddress && <p className="text-xs text-neutral-500 mt-0.5">{sellerAddress}</p>}
+            {sellerPhone && <p className="text-xs text-neutral-500">{sellerPhone}</p>}
+            {!isB2B && co.email && <p className="text-xs text-neutral-500">{co.email}</p>}
           </div>
         </div>
         <div>
-          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">Bill To</p>
-          <div className="bg-primary-50 rounded-lg p-3">
-            <p className="font-semibold text-neutral-900">{invoice.customer_name}</p>
-            {invoice.customer_phone && <p className="text-xs text-neutral-600 mt-1">{invoice.customer_phone}</p>}
-            {customerAddress && <p className="text-xs text-neutral-500 mt-0.5">{customerAddress}</p>}
-          </div>
+          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">
+            {isB2B ? 'Buyer (Ship To)' : 'Bill To'}
+          </p>
+          {isB2B ? (
+            <div className="bg-blue-50 rounded-lg p-3">
+              {shipToCustomer ? (
+                <>
+                  <p className="font-semibold text-neutral-900">{shipToCustomer.name}</p>
+                  {shipToCustomer.phone && <p className="text-xs text-neutral-600 mt-1">{shipToCustomer.phone}</p>}
+                  {shipToAddress && <p className="text-xs text-neutral-500 mt-0.5">{shipToAddress}</p>}
+                </>
+              ) : (
+                <p className="text-xs text-neutral-400 italic">Ship To not specified</p>
+              )}
+            </div>
+          ) : (
+            <div className="bg-primary-50 rounded-lg p-3">
+              <p className="font-semibold text-neutral-900">{invoice.customer_name}</p>
+              {invoice.customer_phone && <p className="text-xs text-neutral-600 mt-1">{invoice.customer_phone}</p>}
+              {customerAddress && <p className="text-xs text-neutral-500 mt-0.5">{customerAddress}</p>}
+            </div>
+          )}
         </div>
+        {isB2B && shipToCustomer && (
+          <div>
+            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2">Invoiced To</p>
+            <div className="bg-primary-50 rounded-lg p-3">
+              <p className="font-semibold text-neutral-900">{invoice.customer_name}</p>
+              {invoice.customer_phone && <p className="text-xs text-neutral-600 mt-1">{invoice.customer_phone}</p>}
+              {customerAddress && <p className="text-xs text-neutral-500 mt-0.5">{customerAddress}</p>}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mb-5">
