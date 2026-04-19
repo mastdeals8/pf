@@ -189,6 +189,7 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
 
   const [soMap, setSoMap] = useState<Record<string, string>>({});
   const [dcMap, setDcMap] = useState<Record<string, string>>({});
+  const [dcIsB2bMap, setDcIsB2bMap] = useState<Record<string, boolean>>({});
 
   const loadData = async () => {
     const [invRes, productsRes, customersRes, godownsData, soRes, dcRes] = await Promise.all([
@@ -196,12 +197,13 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
         .select('id, invoice_number, invoice_date, due_date, customer_id, customer_name, customer_phone, customer_address, customer_address2, customer_city, customer_state, customer_pincode, subtotal, tax_amount, total_amount, paid_amount, outstanding_amount, courier_charges, discount_amount, status, payment_terms, notes, bank_name, account_number, ifsc_code, sales_order_id, delivery_challan_id, created_at')
         .gte('invoice_date', dateRange.from)
         .lte('invoice_date', dateRange.to)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(200),
       supabase.from('products').select('id, name, unit, selling_price').eq('is_active', true),
       supabase.from('customers').select('id, name, phone, alt_phone, address, address2, city, state, pincode').eq('is_active', true).order('name'),
       fetchGodowns(),
       supabase.from('sales_orders').select('id, so_number').order('created_at', { ascending: false }).limit(500),
-      supabase.from('delivery_challans').select('id, challan_number').order('created_at', { ascending: false }).limit(500),
+      supabase.from('delivery_challans').select('id, challan_number, is_b2b').order('created_at', { ascending: false }).limit(500),
     ]);
     const invoiceList = invRes.data || [];
     setInvoices(invoiceList);
@@ -215,8 +217,13 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
     (soRes.data || []).forEach((s: { id: string; so_number: string }) => { sm[s.id] = s.so_number; });
     setSoMap(sm);
     const dm: Record<string, string> = {};
-    (dcRes.data || []).forEach((d: { id: string; challan_number: string }) => { dm[d.id] = d.challan_number; });
+    const b2b: Record<string, boolean> = {};
+    (dcRes.data || []).forEach((d: { id: string; challan_number: string; is_b2b?: boolean }) => {
+      dm[d.id] = d.challan_number;
+      if (d.is_b2b) b2b[d.id] = true;
+    });
     setDcMap(dm);
+    setDcIsB2bMap(b2b);
   };
 
   const loadGodownStock = async (godownId: string, productIds: string[]) => {
@@ -563,33 +570,61 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
     setB2bShipTo(undefined);
     setB2bPriceMap({});
 
-    if (mode === 'b2b' && inv.sales_order_id) {
-      const { data: so } = await supabase
-        .from('sales_orders')
-        .select('ship_to_name, ship_to_phone, ship_to_address1, ship_to_address2, ship_to_city, ship_to_state, ship_to_pin, ship_to_customer_id')
-        .eq('id', inv.sales_order_id)
-        .maybeSingle();
+    if (mode === 'b2b') {
+      let soId = inv.sales_order_id;
 
-      if (so?.ship_to_name) {
-        const addrParts = [so.ship_to_address1, so.ship_to_address2, so.ship_to_city, so.ship_to_state, so.ship_to_pin].filter(Boolean);
-        setB2bShipTo({ name: so.ship_to_name, phone: so.ship_to_phone || '', address: addrParts.join(', ') });
-      } else if (so?.ship_to_customer_id) {
-        const { data: shipCust } = await supabase
-          .from('customers')
-          .select('id, name, phone, address, address2, city, state, pincode')
-          .eq('id', so.ship_to_customer_id)
+      if (inv.delivery_challan_id) {
+        // Prefer DC's ship_to fields (copied from SO at DC creation time)
+        const { data: dc } = await supabase
+          .from('delivery_challans')
+          .select('ship_to_name, ship_to_phone, ship_to_address1, ship_to_address2, ship_to_city, ship_to_state, ship_to_pin, ship_to_customer_id, sales_order_id')
+          .eq('id', inv.delivery_challan_id)
           .maybeSingle();
-        setShipToCustomer(shipCust || undefined);
+
+        if (dc?.ship_to_name) {
+          const addrParts = [dc.ship_to_address1, dc.ship_to_address2, dc.ship_to_city, dc.ship_to_state, dc.ship_to_pin].filter(Boolean);
+          setB2bShipTo({ name: dc.ship_to_name, phone: dc.ship_to_phone || '', address: addrParts.join(', ') });
+        } else if (dc?.ship_to_customer_id) {
+          const { data: shipCust } = await supabase
+            .from('customers')
+            .select('id, name, phone, address, address2, city, state, pincode')
+            .eq('id', dc.ship_to_customer_id)
+            .maybeSingle();
+          setShipToCustomer(shipCust || undefined);
+        }
+
+        if (dc?.sales_order_id) soId = dc.sales_order_id;
+      } else if (inv.sales_order_id) {
+        // Legacy path: no DC link, read ship_to from SO directly
+        const { data: so } = await supabase
+          .from('sales_orders')
+          .select('ship_to_name, ship_to_phone, ship_to_address1, ship_to_address2, ship_to_city, ship_to_state, ship_to_pin, ship_to_customer_id')
+          .eq('id', inv.sales_order_id)
+          .maybeSingle();
+
+        if (so?.ship_to_name) {
+          const addrParts = [so.ship_to_address1, so.ship_to_address2, so.ship_to_city, so.ship_to_state, so.ship_to_pin].filter(Boolean);
+          setB2bShipTo({ name: so.ship_to_name, phone: so.ship_to_phone || '', address: addrParts.join(', ') });
+        } else if (so?.ship_to_customer_id) {
+          const { data: shipCust } = await supabase
+            .from('customers')
+            .select('id, name, phone, address, address2, city, state, pincode')
+            .eq('id', so.ship_to_customer_id)
+            .maybeSingle();
+          setShipToCustomer(shipCust || undefined);
+        }
       }
 
-      const { data: soItems } = await supabase
-        .from('sales_order_items')
-        .select('product_id, b2b_price')
-        .eq('sales_order_id', inv.sales_order_id);
-      if (soItems) {
-        const map: Record<string, number> = {};
-        soItems.forEach(si => { if (si.product_id && si.b2b_price != null) map[si.product_id] = si.b2b_price; });
-        setB2bPriceMap(map);
+      if (soId) {
+        const { data: soItems } = await supabase
+          .from('sales_order_items')
+          .select('product_id, b2b_price')
+          .eq('sales_order_id', soId);
+        if (soItems) {
+          const map: Record<string, number> = {};
+          soItems.forEach(si => { if (si.product_id && si.b2b_price != null) map[si.product_id] = si.b2b_price; });
+          setB2bPriceMap(map);
+        }
       }
     }
 
@@ -891,7 +926,7 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
                               >
                                 <Printer className="w-3.5 h-3.5" /> Print Invoice
                               </button>
-                              {inv.sales_order_id && (
+                              {inv.delivery_challan_id && dcIsB2bMap[inv.delivery_challan_id] && (
                                 <button
                                   onClick={() => { setInvDropdownOpen(null); openPrint(inv, 'b2b'); }}
                                   className="w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-700 hover:bg-blue-50 transition-colors"
@@ -983,7 +1018,7 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
       <Modal isOpen={showViewModal} onClose={() => setShowViewModal(false)} title="Invoice Details" size="2xl"
         footer={
           <div className="flex gap-2">
-            {selectedInvoice?.sales_order_id && (
+            {selectedInvoice?.delivery_challan_id && dcIsB2bMap[selectedInvoice.delivery_challan_id] && (
               <button onClick={() => { setShowViewModal(false); if (selectedInvoice) openPrint(selectedInvoice, 'b2b'); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium hover:bg-blue-100 transition-colors">
                 <Printer className="w-3.5 h-3.5" /> Print B2B
@@ -1390,24 +1425,19 @@ export default function Invoices({ onNavigate: _onNavigate, prefillFromDC }: Inv
         onConfirm={async () => {
           if (!cancelTarget) return;
           setCancellingInvoiceId(cancelTarget.id);
-          const outstanding = cancelTarget.outstanding_amount || 0;
-          await supabase.from('invoices').update({ status: 'cancelled', outstanding_amount: 0 }).eq('id', cancelTarget.id);
-          if (cancelTarget.customer_id && outstanding > 0) {
-            const { data: cust } = await supabase.from('customers').select('balance, total_revenue').eq('id', cancelTarget.customer_id).maybeSingle();
-            if (cust) {
-              await supabase.from('customers').update({
-                balance: Math.max(0, (cust.balance || 0) - outstanding),
-                total_revenue: Math.max(0, (cust.total_revenue || 0) - cancelTarget.total_amount),
-              }).eq('id', cancelTarget.customer_id);
-            }
+          try {
+            await cancelInvoice(cancelTarget.id);
+            setCancelTarget(null);
+            loadData();
+          } catch (err) {
+            alert(err instanceof Error ? err.message : 'Failed to cancel invoice');
+          } finally {
+            setCancellingInvoiceId(null);
           }
-          setCancellingInvoiceId(null);
-          setCancelTarget(null);
-          loadData();
         }}
         title="Cancel Invoice"
         message={cancelTarget ? `Cancel invoice ${cancelTarget.invoice_number} for ${cancelTarget.customer_name}?` : ''}
-        warning="This will reverse stock and cannot be undone."
+        warning="This will reverse the ledger and re-open the parent delivery note. Cannot be undone."
         confirmLabel={cancellingInvoiceId ? 'Cancelling...' : 'Yes, Cancel'}
         isDanger
         suppressAutoClose

@@ -258,6 +258,7 @@ export interface Invoice {
   id: string;
   invoice_number: string;
   sales_order_id?: string;
+  delivery_challan_id?: string;
   customer_id?: string;
   customer_name: string;
   customer_phone?: string;
